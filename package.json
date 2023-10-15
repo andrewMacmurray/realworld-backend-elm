@@ -1,0 +1,29 @@
+{
+  "name": "realworld-backend-elm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ./dev.mjs",
+    "build": "node ./build.mjs",
+    "test": "cd integration && APIURL=http://localhost:3000/api ./run-api-tests.sh"
+  },
+  "author": "Andrew MacMurray",
+  "license": "MIT",
+  "devDependencies": {
+    "@es-exec/esbuild-plugin-start": "^0.0.5",
+    "@vercel/node": "^3.0.14",
+    "elm": "^0.19.1-6",
+    "esbuild": "^0.19.4",
+    "esbuild-plugin-elm": "^0.0.12"
+  },
+  "dependencies": {
+    "@andrewmacmurray/elm-concurrent-task": "^1.1.0",
+    "@vercel/postgres": "^0.5.1",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3",
+    "zod": "^3.22.4"
+  }
+}
