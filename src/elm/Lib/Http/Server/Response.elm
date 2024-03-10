@@ -1,11 +1,14 @@
 module Lib.Http.Server.Response exposing
-    ( Response
+    ( Errors
+    , Response
+    , error
     , noContent
-    , response
-    , send
-    , withBody
+    , respond
+    , sendErrors
+    , sendJson
     , withHeader
     , withHeaders
+    , withJsonBody
     )
 
 import Dict exposing (Dict)
@@ -19,8 +22,8 @@ type alias Response =
     }
 
 
-response : Int -> Response
-response status =
+respond : Int -> Response
+respond status =
     { status = status
     , body = Encode.null
     , headers = Dict.empty
@@ -29,12 +32,13 @@ response status =
 
 noContent : Response
 noContent =
-    response 204
+    respond 204
 
 
-withBody : Encode.Value -> Response -> Response
-withBody body res =
+withJsonBody : Encode.Value -> Response -> Response
+withJsonBody body res =
     { res | body = body }
+        |> withHeader "Content-type" "application/json"
 
 
 withHeader : String -> String -> Response -> Response
@@ -47,6 +51,36 @@ withHeaders headers res =
     { res | headers = Dict.union (Dict.fromList headers) res.headers }
 
 
-send : Int -> Encode.Value -> Response
-send status body =
-    response status |> withBody body
+sendJson : Int -> Encode.Value -> Response
+sendJson status body =
+    respond status |> withJsonBody body
+
+
+
+-- Errors
+
+
+type alias Errors =
+    { status : Int
+    , errors : List ( String, List Encode.Value )
+    }
+
+
+error : Int -> String -> List Encode.Value -> Errors
+error status name details =
+    { status = status
+    , errors = [ ( name, details ) ]
+    }
+
+
+sendErrors : Errors -> Response
+sendErrors e =
+    sendJson e.status
+        (Encode.object
+            [ ( "errors"
+              , e.errors
+                    |> Dict.fromList
+                    |> Encode.dict identity (Encode.list identity)
+              )
+            ]
+        )

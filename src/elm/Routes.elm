@@ -1097,56 +1097,11 @@ respondNoContent =
 
 
 respondWith : Int -> (a -> Encode.Value) -> Result (Server.Error Error) a -> Server.Response
-respondWith status toBody res =
-    case res of
-        Ok a ->
-            Response.send status (toBody a)
-
-        Err e ->
-            case e of
-                Server.RequestError re_ ->
-                    case re_ of
-                        Server.BodyError e_ ->
-                            validationErrors (encodeBodyErrors e_)
-
-                        Server.HeadersError e_ ->
-                            Header.handleError validationErrors handleError e_
-
-                        Server.ParamsError e_ ->
-                            validationErrors (Param.encodeError e_)
-
-                Server.HandlerError e_ ->
-                    handleError e_
+respondWith =
+    Server.sendJson handleError
 
 
-encodeBodyErrors : Decode.Error -> Encode.Value
-encodeBodyErrors err =
-    Encode.object [ ( "body", Encode.list identity (bodyErrors err []) ) ]
-
-
-bodyErrors : Decode.Error -> List Encode.Value -> List Encode.Value
-bodyErrors err xs =
-    case err of
-        Decode.Field field (Decode.Failure reason _) ->
-            Encode.string (field ++ " " ++ reason) :: xs
-
-        Decode.Field _ e ->
-            bodyErrors e xs
-
-        Decode.Index i (Decode.Failure reason _) ->
-            Encode.string ("Problem at index " ++ String.fromInt i ++ " " ++ reason) :: xs
-
-        Decode.Index _ e ->
-            bodyErrors e xs
-
-        Decode.OneOf errs ->
-            List.concatMap (\x -> bodyErrors x xs) errs
-
-        Decode.Failure reason _ ->
-            Encode.string reason :: xs
-
-
-handleError : Error -> Server.Response
+handleError : Error -> Response.Errors
 handleError e =
     case e of
         Error.NotFound item ->
@@ -1174,16 +1129,6 @@ handleError e =
             error 500 "error" "internal server error"
 
 
-validationErrors : Encode.Value -> Response.Response
-validationErrors =
-    errors 422
-
-
-error : Int -> String -> String -> Server.Response
-error status reason message =
-    errors status (Encode.object [ ( reason, Encode.list Encode.string [ message ] ) ])
-
-
-errors : Int -> Encode.Value -> Response.Response
-errors status errs =
-    Response.send status (Encode.object [ ( "errors", errs ) ])
+error : Int -> String -> String -> Response.Errors
+error status kind reason =
+    Response.error status kind [ Encode.string reason ]

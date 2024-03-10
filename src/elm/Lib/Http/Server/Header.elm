@@ -15,7 +15,7 @@ import ConcurrentTask as Task exposing (ConcurrentTask)
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
-import Lib.Http.Server.Response exposing (Response)
+import Lib.Http.Server.Response as Response
 
 
 
@@ -83,33 +83,23 @@ run (Headers task) raw =
 -- Errors
 
 
-handleError : (Encode.Value -> Response) -> (x -> Response) -> Error x -> Response
-handleError toResponse handle err =
+handleError : Int -> (x -> Response.Errors) -> Error x -> Response.Errors
+handleError status toErrors err =
     case err of
         MissingHeader h ->
-            toResponse
-                (Encode.object
-                    [ ( "headers"
-                      , Encode.object
-                            [ ( h, Encode.string "Missing required request header" )
-                            ]
-                      )
-                    ]
-                )
+            Response.error status
+                "headers"
+                [ Encode.object [ ( h, Encode.string "Missing required request header" ) ]
+                ]
 
         HeaderDecodeError name x ->
-            toResponse
-                (Encode.object
-                    [ ( "headers"
-                      , Encode.object
-                            [ ( name, Encode.string (Decode.errorToString x) )
-                            ]
-                      )
-                    ]
-                )
+            Response.error status
+                "headers"
+                [ Encode.object [ ( name, Encode.string (Decode.errorToString x) ) ]
+                ]
 
         TaskError x ->
-            handle x
+            toErrors x
 
 
 

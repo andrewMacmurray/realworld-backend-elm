@@ -28,6 +28,7 @@ module Lib.Http.Server exposing
     , request
     , respond
     , routes
+    , sendJson
     , subscriptions
     , withHeaders
     , withJsonBody
@@ -188,6 +189,60 @@ toHandler endpoint_ context =
 runRequest : Context -> Request x a -> ConcurrentTask (Error x) a
 runRequest context (Request run) =
     run context
+
+
+
+-- Json Response
+
+
+sendJson : (x -> Response.Errors) -> Int -> (a -> Encode.Value) -> Result (Error x) a -> Response
+sendJson handleError status encode res =
+    case res of
+        Ok a ->
+            Response.sendJson status (encode a)
+
+        Err e ->
+            Response.sendErrors (toErrors handleError e)
+
+
+toErrors : (x -> Response.Errors) -> Error x -> Response.Errors
+toErrors handleError e =
+    case e of
+        RequestError re_ ->
+            case re_ of
+                BodyError e_ ->
+                    Response.error 422 "body" (bodyErrors e_ [])
+
+                HeadersError e_ ->
+                    Header.handleError 422 handleError e_
+
+                ParamsError e_ ->
+                    Response.error 422 "params" (Param.errors e_)
+
+        HandlerError e_ ->
+            handleError e_
+
+
+bodyErrors : Decode.Error -> List Encode.Value -> List Encode.Value
+bodyErrors err xs =
+    case err of
+        Decode.Field field (Decode.Failure reason _) ->
+            Encode.string (field ++ " " ++ reason) :: xs
+
+        Decode.Field _ e ->
+            bodyErrors e xs
+
+        Decode.Index i (Decode.Failure reason _) ->
+            Encode.string ("Problem at index " ++ String.fromInt i ++ " " ++ reason) :: xs
+
+        Decode.Index _ e ->
+            bodyErrors e xs
+
+        Decode.OneOf errs ->
+            List.concatMap (\x -> bodyErrors x xs) errs
+
+        Decode.Failure reason _ ->
+            Encode.string reason :: xs
 
 
 

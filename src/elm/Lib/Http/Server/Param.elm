@@ -3,7 +3,7 @@ module Lib.Http.Server.Param exposing
     , Params
     , Raw
     , decode
-    , encodeError
+    , errors
     , int
     , map2
     , string
@@ -85,23 +85,17 @@ decodeParam name decoder =
 -- Errors
 
 
-encodeError : Error -> Encode.Value
-encodeError e =
+errors : Error -> List Encode.Value
+errors e =
     case e of
         MissingParam name ->
-            Encode.object
-                [ ( "params"
-                  , Encode.object
-                        [ ( name, Encode.string "Missing expected request parameter in route definition" )
-                        ]
-                  )
+            [ Encode.object
+                [ ( name, Encode.string "Missing expected request parameter in route definition" )
                 ]
+            ]
 
         DecodeError name error ->
-            Encode.object
-                [ ( "params"
-                  , Encode.object
-                        [ ( name, Encode.string (Decode.errorToString error) )
-                        ]
-                  )
+            [ Encode.object
+                [ ( name, Encode.string (Decode.errorToString error) )
                 ]
+            ]
