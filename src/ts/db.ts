@@ -4,7 +4,7 @@ import * as vercel from "@vercel/postgres";
 import { env } from "./env";
 import { Tasks } from "@andrewmacmurray/elm-concurrent-task";
 
-let client_: PoolClient | null;
+const pool = createPool()
 
 export function tasks(): Tasks {
   return {
@@ -13,9 +13,7 @@ export function tasks(): Tasks {
 }
 
 function query(options: { query: string }): Promise<QueryResult<any>> {
-  return getClient().then((client) =>
-    client.query({ text: options.query, types: { getTypeParser } })
-  );
+  return pool.query({ text: options.query, types: { getTypeParser } })
 }
 
 function getTypeParser(id: pgTypes.TypeId, format?: pgTypes.TypeFormat) {
@@ -30,18 +28,7 @@ function getTypeParser(id: pgTypes.TypeId, format?: pgTypes.TypeFormat) {
   };
 }
 
-function getClient(): Promise<PoolClient> {
-  return client_
-    ? Promise.resolve(client_)
-    : pool()
-        .connect()
-        .then((client) => {
-          client_ = client;
-          return client;
-        });
-}
-
-function pool(): Pool {
+function createPool(): Pool {
   const connectionString = env.POSTGRES_URL;
   return env.NODE_ENV === "production"
     ? vercel.createPool({ connectionString })
