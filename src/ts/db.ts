@@ -12,8 +12,8 @@ export function tasks(): Tasks {
   };
 }
 
-function query(options: { query: string }): Promise<QueryResult<any>> {
-  return pool.query({ text: options.query, types: { getTypeParser } })
+function query(options: { text: string; values: any[] }): Promise<QueryResult<any>> {
+  return pool.query({ ...options, types: { getTypeParser } })
 }
 
 function getTypeParser(id: pgTypes.TypeId, format?: pgTypes.TypeFormat) {

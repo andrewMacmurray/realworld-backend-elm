@@ -64,7 +64,7 @@ CREATE TABLE articles (
 	user_id integer NOT NULL REFERENCES users (id),
 	created_at timestamp NOT NULL DEFAULT now(),
 	updated_at timestamp NOT NULL DEFAULT now(),
-	CONSTRAINT unique_article UNIQUE title
+	CONSTRAINT unique_article UNIQUE (title)
 );
 
 CREATE TABLE favorites (

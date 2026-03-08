@@ -20,6 +20,8 @@ module Lib.Database.Postgres exposing
     )
 
 import ConcurrentTask as Task exposing (ConcurrentTask)
+import Dict exposing (Dict)
+import Dict.Extra
 import Json.Decode as Decode
 import Json.Encode as Encode
 
@@ -29,12 +31,17 @@ import Json.Encode as Encode
 
 
 type Statement
-    = Statement String
+    = Statement String (Dict String Param)
+
+
+type Param
+    = StringParam String
+    | IntParam Int
 
 
 statement : String -> Statement
-statement =
-    Statement
+statement s =
+    Statement s Dict.empty
 
 
 empty : Statement
@@ -53,18 +60,20 @@ false =
 
 
 withFragment : String -> Statement -> Statement -> Statement
-withFragment name =
-    param name << unwrap_
+withFragment name (Statement s1 p1) (Statement s2 p2) =
+    Statement
+        (String.replace ("{" ++ name ++ "}") s1 s2)
+        (Dict.union p1 p2)
 
 
 withInt : String -> Int -> Statement -> Statement
 withInt name =
-    param name << String.fromInt
+    withParam name << IntParam
 
 
 withString : String -> String -> Statement -> Statement
 withString name =
-    param name << escape
+    withParam name << StringParam
 
 
 whereAll : List Statement -> Statement
@@ -77,42 +86,75 @@ whereAll statements =
             |> withFragment "CLAUSES" (joinStatementsWith " AND " statements)
 
 
-escape : String -> String
-escape s =
-    "E" ++ quote (escapeCharacters s)
-
-
-param : String -> String -> Statement -> Statement
-param name value =
-    unwrap_
-        >> String.replace ("{" ++ name ++ "}") value
-        >> Statement
-
-
 joinStatementsWith : String -> List Statement -> Statement
-joinStatementsWith sep =
-    List.map unwrap_
-        >> String.join sep
-        >> Statement
+joinStatementsWith sep statements =
+    let
+        scopeParams : Int -> Statement -> Statement
+        scopeParams i (Statement s px) =
+            let
+                suffix : String -> String
+                suffix k =
+                    k ++ "_" ++ String.fromInt i
+
+                renamedSQL : String
+                renamedSQL =
+                    Dict.keys px
+                        |> List.foldl (\k acc -> String.replace ("{" ++ k ++ "}") ("{" ++ suffix k ++ "}") acc) s
+
+                renamedParams : Dict String Param
+                renamedParams =
+                    Dict.Extra.mapKeys suffix px
+            in
+            Statement renamedSQL renamedParams
+
+        indexed : List Statement
+        indexed =
+            List.indexedMap scopeParams statements
+    in
+    Statement
+        (List.map (\(Statement s _) -> s) indexed |> String.join sep)
+        (List.foldl (\(Statement _ p) acc -> Dict.union p acc) Dict.empty indexed)
+
+
+withParam : String -> Param -> Statement -> Statement
+withParam name p (Statement s px) =
+    Statement s (Dict.insert name p px)
 
 
 
--- Internal
+-- Encode
 
 
-unwrap_ : Statement -> String
-unwrap_ (Statement s) =
-    s
+encodeStatement : Statement -> Encode.Value
+encodeStatement (Statement s px) =
+    let
+        encodeParam : Param -> Encode.Value
+        encodeParam p =
+            case p of
+                StringParam str ->
+                    Encode.string str
 
+                IntParam i ->
+                    Encode.int i
 
-quote : String -> String
-quote s =
-    "'" ++ s ++ "'"
+        params : List ( String, Param )
+        params =
+            Dict.toList px
 
+        encodedQuery : Encode.Value
+        encodedQuery =
+            List.indexedMap (\i ( name, _ ) -> ( i + 1, name )) params
+                |> List.foldl (\( i, name ) acc -> String.replace ("{" ++ name ++ "}") ("$" ++ String.fromInt i) acc) s
+                |> Encode.string
 
-escapeCharacters : String -> String
-escapeCharacters =
-    String.replace "'" "\\'"
+        encodedParams : Encode.Value
+        encodedParams =
+            Encode.list (encodeParam << Tuple.second) params
+    in
+    Encode.object
+        [ ( "text", encodedQuery )
+        , ( "values", encodedParams )
+        ]
 
 
 
@@ -193,14 +235,9 @@ query decoder statement_ =
         { function = "db:query"
         , expect = Task.expectJson decodeResults
         , errors = Task.expectThrows QueryError
-        , args = Encode.object [ ( "query", encodeStatement statement_ ) ]
+        , args = encodeStatement statement_
         }
         |> Task.andThen (decodeQueryResults decoder >> Task.fromResult)
-
-
-encodeStatement : Statement -> Encode.Value
-encodeStatement =
-    unwrap_ >> Encode.string
 
 
 decodeQueryResults : Decoder a -> Results -> Result Error a
